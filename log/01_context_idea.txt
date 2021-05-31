@@ -1,0 +1,56 @@
+If this is how we define a function
+
+fn my_fun() {
+  let calc_first = calc_first <- y <- matrix
+}
+
+But you invent some syntax like context<log: Logger>,
+where Logger is some kind of monadic structure.
+
+Then I'm thinking that you can invoke this structure like a decorator in JS/TS:
+
+context<log: Logger>
+fn my_fun(y, matrix) {
+  // no usage
+  let calc_first = calc_first <- y <- matrix
+
+  // short hand for logging the binding named second
+  @log
+  let second = do_second <- calc_first <- y
+
+  // long hand for logging expression
+  @log { second < calc_first }
+
+  // short hand for logging binding
+  @log second
+  // long hand for logging binding
+  @log (some_value)
+}
+
+Logger is some typ of accumulator which receives, say, the variant of expressions,
+and returns a string.
+Can this additional context be useful for the programmer? As you debug your
+own code, you might have shortcuts available to expose logging statements.
+
+What if we apply the same idea to some other contexts?
+
+context<t: Translator>
+fn render_profile(user) (
+  layout(
+    description(
+      t."username"
+      user.username
+    )
+    description(
+      t."motto"
+      user.motto
+    )
+  )
+)
+
+That's a context used possibly sneakily.
+So there is a relationship between the return type of a Context() call and the type of its input.
+In that they're the same.
+
+So if t."username" is a call to a function t with () -> "username" then 
+the return type must be () -> "username"
