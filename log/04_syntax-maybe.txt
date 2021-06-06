@@ -1,0 +1,50 @@
+type JSON
+
+templated<record BodyType>
+record HTTPRequest =
+  path: Str
+  body: BodyType
+
+record HTTPResponse = 
+  statusCode: Int
+  body: JSON
+
+  let OK = (body: JSON) -> {statusCode: 200, body}
+  let BadRequest = () -> {statusCode: 200, body: ""}
+
+record NewTodo
+record StoredTodo
+
+type EndPoint = 
+  HTTPRequest -> HTTPresponse
+
+context<sql: Sequel>
+let insert_todo =
+  (input: NewTodo) -> Result<Int, Sequel::Error>
+    sql```
+      INSERT INTO todos
+      VALUES ${pick_out n []}
+      RETURNING id;
+
+context<sql: Sequel>
+let fetch_todo =
+  (id: Int) -> Maybe<StoredTodo>
+    sql```
+      SELECT id, title, text 
+      FROM todos
+      WHERE id = ${id}
+      LIMIT 1;
+    ```
+  
+
+let create_todo = 
+  (input: NewTodo) -> StoredTodo
+    let id = insert_todo input
+    let todo = fetch_todo id
+
+    when todo
+    is Result::Success<'>
+      HTTPResponse::OK (unpack todo)
+    is '
+      HTTPResponse::BadRequest
+

@@ -75,7 +75,12 @@
     "set": "cpp",
     "stack": "cpp",
     "typeindex": "cpp",
-    "format": "cpp"
+    "format": "cpp",
+    "future": "cpp",
+    "numeric": "cpp",
+    "random": "cpp",
+    "regex": "cpp",
+    "thread": "cpp"
   },
   "FSharp.suggestGitignore": false
 }

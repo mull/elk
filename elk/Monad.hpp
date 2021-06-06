@@ -12,5 +12,5 @@ namespace elk {
     std::string to_debug() const { return name; }
   };
 
-  static_assert(elk::concepts::Debuggable<Monad>);
+  static_assert(concepts::Debuggable<Monad>);
 }

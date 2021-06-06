@@ -1,8 +1,9 @@
 #pragma once
 
 #include "fmt/core.h"
-
 #include "./concepts/Debuggable.hpp"
+#include <optional>
+#include <memory>
 
 namespace {
   enum class TypeCategory {
@@ -12,15 +13,29 @@ namespace {
 }
 
 namespace elk {
+  using namespace std;
+
   struct Type {
-    const std::string name;
-    const TypeCategory category;
+    const size_t                      id;
+    const string                      name;
+    const optional<shared_ptr<Type>>  of;
+
+    auto category() const {
+      return TypeCategory::Concrete;
+    }
 
     auto to_debug() const {
-      return fmt::format("{} ({})", name, (category == TypeCategory::Concrete) ? "concrete" : "abstract");
+      const auto type = category() == TypeCategory::Concrete 
+        ? fmt::format("-> {}", name) 
+        : "-> ()";
+      const auto id = of 
+        ? fmt::format("{}<{}>", of.value()->name, name)
+        : name;
+
+      return fmt::format("{} {}", id, type);
     }
   };
 
 
-  static_assert(elk::concepts::Debuggable<Type>);
+  static_assert(concepts::Debuggable<Type>);
 }

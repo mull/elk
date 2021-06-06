@@ -5,7 +5,8 @@
 namespace elk {
 namespace std_lib {
 namespace types {
-  struct Rec : Type {
+  static const Type Rec = { 
+    .name = "Str"
   };
 }
 }
