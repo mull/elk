@@ -1,0 +1,1 @@
+type Int = elk.data.Scalar (elk.data.make_int_64)

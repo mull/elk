@@ -1,0 +1,75 @@
+<?xml  version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN"   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0" >
+<!-- Generated via Iro -->
+<dict>
+  <key>fileTypes</key>
+  <array> 
+    <string>elk</string>
+   </array>
+  <key>name</key>
+  <string>elk</string>
+  <key>patterns</key>
+  <array> 
+    <dict>
+      <key>include</key>
+      <string>#main</string>
+    </dict>
+   </array>
+  <key>scopeName</key>
+  <string>source.elk</string>
+  <key>uuid</key>
+  <string></string>
+  <key>repository</key>
+  <dict>
+    <key>main</key>
+    <dict>
+      <key>patterns</key>
+      <array> 
+        <dict>
+          <key>match</key>
+          <string>(\b(let|type))</string>
+          <key>name</key>
+          <string>text.elk</string>
+        </dict>
+        <dict>
+          <key>match</key>
+          <string>(--.*)</string>
+          <key>name</key>
+          <string>text.elk</string>
+        </dict>
+        <dict>
+          <key>begin</key>
+          <string>(\&quot;)</string>
+          <key>beginCaptures</key>
+          <dict>
+            <key>1</key>
+            <dict>
+              <key>name</key>
+              <string>text.elk</string>
+            </dict>
+          </dict>
+          <key>contentName</key>
+          <string>text.elk</string>
+          <key>end</key>
+          <string>(\&quot;)</string>
+          <key>endCaptures</key>
+          <dict>
+            <key>1</key>
+            <dict>
+              <key>name</key>
+              <string>text.elk</string>
+            </dict>
+          </dict>
+        </dict>
+       </array>
+    </dict>
+    <key>main__1</key>
+    <dict>
+      <key>patterns</key>
+      <array> 
+       </array>
+    </dict>
+  </dict>
+</dict>
+</plist>

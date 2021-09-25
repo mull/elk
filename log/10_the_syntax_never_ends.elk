@@ -1,0 +1,53 @@
+data FiveM {
+  -- we are now inside an effect block(?)
+  -- meaning the following declarations
+  id: Int                                     -- UnboundDefinition<"id", Int>
+  name: String                                -- UnboundDefinition<"name", String>
+}
+
+-- are interpeted like this
+type FiveM = 
+  elk.Data.Shape () 
+    let id: Int                               -- BoundDefinition<"id", Int>
+    let name: String                          -- BoundDefinition<"name", String>
+
+-- because there exists a function on Shape that accepts an unbound definition and
+-- returns a bound one
+-- in other words we could just write
+type FiveM =
+  let id: Int
+  let name: String
+
+-- perhaps the Shape instance will have more functions later.
+-- So an interesting thing then about {} is how it's sort of a reversal-syntax
+-- I think I may call it an "effect block"
+
+
+-- So an effect block, if that's what we'll call it, is defined like:
+-- " a list of calls to be applied one-by-one to some value that is not specified in the block"
+
+-- So this is valid:
+let my_effect {                              -- BoundDefinition<my_effect, EffectBlock<....>>
+  "this"
+  "comes"
+  "last"
+}
+
+-- And apply it a'la 
+debug 
+  |< my_effect
+
+-- Which will call debug three times, one by one.
+
+-- It makes Abstract Data Types the first and easiest to implement
+type Int                                    -- Type<Int, Abstract>
+-- Then ones that are scalars
+type Int =
+  elk.Data.Scalar (:int_64)                 -- Type<Int, elk.Data.Scalar(:int_64)>
+    -- There could be code here
+-- Then Semantic Types (Algebraic)
+type ID: Int                                -- Type<ID, Int>
+-- Then some more
+let id: Int
+let id: ID
+let id: ID = 4

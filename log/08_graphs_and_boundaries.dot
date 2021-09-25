@@ -1,0 +1,30 @@
+digraph {
+  compound=true;
+  fontsize=10.0;
+  label="Entry"
+
+  subgraph cluster_elk_built_ins {
+    label="elk builtins"
+    "ebi.Int" [fontsize=10];
+    "ebi.Str" [fontsize=10];
+  }
+
+  subgraph cluster_elk_algebra {
+    label="elk algebra"
+    "eba.Maybe" [fontsize=10];
+  }
+
+  subgraph cluster_json {
+    label="json"
+    "json.Int" [fontsize=10];
+    "json.Str" [fontsize=10];
+  }
+
+  "json.Str" -> "ebi.Str";
+  "json.Str" -> "eba.Maybe" -> "ebi.Int";
+  "json.Str" -> "ebi.Int";
+
+  "json.Int" -> "ebi.Int";
+
+  "ebi.Int" -> "eba.Maybe";
+}

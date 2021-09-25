@@ -1,0 +1,24 @@
+data AstNode = {kind: Str, value: ?}
+
+parse_int8 = Str -> |in| int8(in)
+parse_str  = Str -> |in| in
+
+# T<parse_int8>
+# is the return type of parse_int8, which is something like
+# int8<parse_int8>
+
+# Represent both T<parse_int8> and AstNode
+parse_int8 x AstNode -> |value| {kind: "int8", value}    
+parse_str x AstNode  -> |value| {kind: "string", value}
+
+# So then there's AstNode<Str> and AstNode<Int8>?
+
+type ParseError
+	<> Int8<Failure>
+  <> Str<Failure>
+
+parse_int8 x ParseError -> |_| "Not a valid int8"
+
+parse_int8 -> DebugValue -> |v| "int8: #{v}"
+
+parse_null x ParseError -> |str| ."Expected "null" but got "${str}"".

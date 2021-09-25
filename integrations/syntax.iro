@@ -1,0 +1,81 @@
+#################################################################
+## Iro
+################################################################ 
+##
+## * Press Ctrl + '+'/'-' To Zoom in
+## * Press Ctrl + S to save and recalculate... 
+## * Documents are saved to web storage.
+## * Only one save slot supported.
+## * Matches cannot span lines.
+## * Unicode chars must be defined in \u0000 to \uffff format.
+## * All matches must be contained by a single group ( ... )
+## * Look behinds not permitted, (?<= or (?<!
+## * Look forwards are permitted (?= or (?!
+## * Constants are defined as __my_const = (......)
+## * The \= format allows unescaped regular expressions
+## * Constants referenced by match \= $${__my_const}
+## * Constants can reference other constants
+## * You are free to delete all the default scopes.
+## * Twitter : ainslec , Web: http://eeyo.io/iro
+##
+################################################################
+
+name = elk
+file_extensions [] = elk;
+
+__KEYWORDS \= (\b(let|type))
+
+contexts[] {
+   main : context {
+      : pattern {
+         regex \= $${__KEYWORDS}
+         styles [] = .keyword;
+      }
+      
+      : pattern {
+         regex \= (--.*)
+         styles [] = .comment;
+      }
+      
+      : pattern {
+         regex \= (\'\w+)
+         styles [] = .value_tag;
+      }
+      
+      : pattern {
+         regex \= (\s+(_|>) )
+         styles [] = .instruction;
+      }
+   
+      : inline_push {
+        regex \= (\")
+        styles [] = .punctuation;
+        default_style = .text
+        : pop {
+            regex \= (\")
+            styles [] = .punctuation;
+        }
+      }
+   }
+}
+
+styles [] {
+   .keyword : style {
+     color = cyan
+   }
+   .comment : style {
+      color = light_green
+      italic = true
+   }
+   .value_tag : style {
+      color = gold
+   }
+   .instruction : style {
+      color = brown
+   }
+   
+  .binding : style color = "green";
+  .punctuation : style color = "red";
+  .text : style color = "brown";
+  .escaped_text : style color = "yellow";
+}

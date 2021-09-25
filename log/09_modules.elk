@@ -1,0 +1,17 @@
+module elk.types {
+  type Int
+  type Str
+}
+
+-- Implicit, perhaps, in every program
+include elk.types
+
+
+module JSON {
+  -- Algebraic data type
+  type UnparsedValue : Str
+  -- Sum type
+  type ParsedValue = Int + Str
+
+  
+}

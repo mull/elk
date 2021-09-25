@@ -80,7 +80,8 @@
     "numeric": "cpp",
     "random": "cpp",
     "regex": "cpp",
-    "thread": "cpp"
+    "thread": "cpp",
+    "cassert": "cpp"
   },
   "FSharp.suggestGitignore": false
 }

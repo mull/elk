@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 // TODO: Detect support from CXX?
 template <class From, class To>
 concept convertible_to =

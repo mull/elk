@@ -1,0 +1,58 @@
+type Unit
+
+type Either (A, B)
+  Left -> A
+  Right -> B
+
+type Maybe (A)
+  Left -> A
+  Right -> Unit 
+
+
+
+let bla = "heyo"
+
+
+-- match (Range, (Comparable) -> Result)
+-- type Range
+-- ....
+--   <> ! -> Infinity
+--   <> ? -> maybe Infinity
+
+let whitespace (Char) -> |c| match 1 ' '
+
+let parse_number (Str) ->
+  _ whitespace
+
+  maybe match 1 '-'
+    > 'Signed
+
+  either
+    match 1 positive_digit
+          ? digit
+    match 1 '0'
+    > 'Integer
+
+  maybe
+    match 1 '.'
+    match ! digit
+    > 'Fraction
+
+  maybe
+    match 1 ('e', 'E')
+    maybe match 1 ('-', '+')
+    match ! digit
+    > 'Exponent
+
+  _ whitespace
+
+let tokenize_number (parse_number) -> |res|
+  sum
+    'Signed
+      ? {is_signed: true}
+      : {is_signed: false}
+
+    match
+      ('Integer, 'Fraction, 'Exponent) {as: double}
+      ('Integer, 'Fraction) {as: double}
+      ('Integer) {as: int64}

@@ -1,0 +1,45 @@
+{
+  "fileTypes": [
+    "elk"
+  ],
+  "name": "elk",
+  "patterns": [
+    {
+      "include": "#main"
+    }
+  ],
+  "scopeName": "source.elk",
+  "uuid": "",
+  "repository": {
+    "main": {
+      "patterns": [
+        {
+          "match": "(\\b(let|type))",
+          "name": "text.elk"
+        },
+        {
+          "match": "(--.*)",
+          "name": "text.elk"
+        },
+        {
+          "begin": "(\\\")",
+          "beginCaptures": {
+            "1": {
+              "name": "text.elk"
+            }
+          },
+          "contentName": "text.elk",
+          "end": "(\\\")",
+          "endCaptures": {
+            "1": {
+              "name": "text.elk"
+            }
+          }
+        }
+      ]
+    },
+    "main__1": {
+      "patterns": []
+    }
+  }
+}

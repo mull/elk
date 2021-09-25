@@ -1,0 +1,25 @@
+{
+    "name": "elk-lang",
+    "displayName": "elk-lang",
+    "description": "",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.60.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "elk",
+            "aliases": ["Emils Language 'Kay?", "elk"],
+            "extensions": [".elk"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "elk",
+            "scopeName": "source.elk",
+            "path": "./syntaxes/elk.tmLanguage.json"
+        }]
+    }
+}
