@@ -1,0 +1,81 @@
+# Binding
+let x
+
+# Assignment
+x = y
+
+# BoundAssignment
+let z = y
+
+# List of Value
+[x, z, y]
+
+# List of Type
+[Int, Char]
+
+# Associative Array
+[numbers_with: Int, characters_with: Char]
+
+# Abstract Data Types
+type NamedBinding
+type BoundAssignment
+
+# Scope
+let foo =
+  x
+
+# Concrete Data Types
+type Record =
+  # Algebraic Data Types
+  type Key = Str
+
+  # @state
+  let @fields =
+    [Key, Type]
+
+  
+  # Input
+  [binding: NamedBinding] ->
+    # Would change this syntax but this makes it a tiny bit easier
+    @fields [set:NamedBinding.name to:NamedBinding.type]
+
+# Instance of Type
+let Record =
+  (assignment: Assignment) ->
+    let field = @fields[assignment.name]
+    # assert_type (assignment.type, field.type)
+    @fields[assignment.name] = assignment.value
+
+
+
+type EmptyIsOkay : Record {
+  # Effect block
+}
+
+type Input : Record {
+  # Effect
+  firstName: Str
+  # Effect
+  lastName: Str
+}
+
+# Construct
+let empty = EmptyIsOkay
+
+let or_with_empty_block = EmptyIsOkay {
+  # Effect block
+}
+
+# Construct
+let input = Input {
+  # Effect block 
+
+  # Assignment
+  firstName = "Emil"
+  # Assignment
+  lastName = "Ahlbaeck"
+}
+
+# Reference
+x
+input.firstName
