@@ -28,35 +28,24 @@ namespace def {
       return id == other.id;
     }
   };
-  struct FunctionID {
-    const size_t id;
-    bool operator==(const FunctionID& other) const { 
-      return id == other.id;
-    }
-  };
 
-  using ID = std::variant<TypeID, ValueID, FunctionID>;
+  using ID = std::variant<TypeID, ValueID>;
 
   struct hash_id {
     std::size_t operator() (const TypeID &me) const { return me.id; }
     std::size_t operator() (const ValueID &type) const { return type.id; }
-    std::size_t operator() (const FunctionID &type) const { return type.id; }
   };
 
   struct Value; struct Type;
   struct ArgumentList; struct Function;
-  struct Scope; struct Construct; struct Manifest;
-
-  using AstNode = std::variant<Value, Type, ArgumentList, Construct, Function, Scope, Manifest>;
-
-  struct Scope : public std::vector<AstNode> {};
+  struct Construct;
 
   struct ParameterList : public std::vector<TypeID> {};
 
   struct Function {
     const ParameterList parameters {};
     const TypeID        return_type_id;
-    const Scope         scope {};
+    // const Scope         scope {};
   };
 
   struct Value; struct Type;
@@ -93,14 +82,10 @@ namespace def {
     };
   }
 
-  struct ArgumentList : public std::vector<Manifest> {};
+  struct ArgumentList : public std::vector<ValueID> {};
   struct Construct {
     const TypeID type_id;
     const ArgumentList arguments;
-  };
-
-  struct Manifest {
-    const Value value;
   };
 
   struct Type {
@@ -173,19 +158,11 @@ struct VM {
   };
 
   std::unordered_map<def::ValueID, VMValue, def::hash_id> values {};
-  std::unordered_map<def::FunctionID, def::Function, def::hash_id> functions {};
 
   def::TypeID register_type(const def::Type type) {
     const auto id = def::TypeID {.id = _type_id++ };
     types.insert(std::make_pair(id, type));
     type_names.insert(std::make_pair(type.name, id));
-    return id;
-  }
-
-
-  def::FunctionID register_function(const def::Function function) {
-    def::FunctionID id = {.id=_function_id++};
-    functions.insert(std::make_pair(id, function));
     return id;
   }
 
@@ -207,41 +184,9 @@ struct VM {
     return id;
   }
 
-  def::ID interpret(const def::AstNode node) {
-    if (std::holds_alternative<def::Construct>(node)) {
-      const auto n_construct = std::get<def::Construct>(node);
-      return this->construct(n_construct.type_id, n_construct.arguments);
-    } else if (std::holds_alternative<def::Function>(node)) {
-      const auto function = std::get<def::Function>(node);
-      return this->register_function(function);
-    } else if (std::holds_alternative<def::Manifest>(node)) {
-      const auto manifest = std::get<def::Manifest>(node);
-      return this->construct(manifest.value.type_id, manifest.value.v);
-    }
-
-    throw std::runtime_error("Do not know how to interpret this node");
-  }
-
-  def::ID invoke(def::FunctionID function_id, def::ArgumentList arguments = {}) {
-    const auto function = functions.at(function_id);
-    if (function.scope.empty()) return this->construct(function.return_type_id);
-    if (function.scope.size() == 1) return this->interpret(function.scope.front());
-
-    auto cur = function.scope.cbegin();
-    const auto end = std::prev(function.scope.cend());
-
-    while (cur != end) {
-      fmt::print("Invoke hehe\n");
-      ++cur;
-    }
-
-    return this->construct(function.return_type_id);
-  }
-
   private:
   size_t _type_id {STARTING_TYPE_ID};
   size_t _value_id {0};
-  size_t _function_id {0};
 };
 
 
@@ -254,11 +199,17 @@ namespace ast {
       return id == other.id;
     }
   };
+  struct FunctionID {
+    const size_t id;
+    bool operator==(const FunctionID& other) const { 
+      return id == other.id;
+    }
+  };
 
-  using ID = std::variant<def::ID, BindingID>;
+  using ID = std::variant<def::ID, BindingID, FunctionID>;
 
   struct Symbol; struct RefBinding; struct RefType; struct MakeScalar;
-  struct MakeBinding; struct FunctionDefinition;
+  struct MakeBinding; struct FunctionDefinition; struct FunctionBody;
 
   struct Symbol : public std::string {};
 
@@ -266,7 +217,13 @@ namespace ast {
   struct RefType { const Symbol symbol; };
   struct MakeScalar { const Symbol type_name; const def::value_t value; };
 
-  struct FunctionDefinition {};
+  struct Expression;
+  struct Body : public std::vector<Expression> {};
+  struct FunctionDefinition {
+    const Body body;
+    // TODO: Shouldn't get to be null!
+    const RefType return_type_id;
+  };
 
   using InputValue = std::variant<RefBinding, RefType, MakeScalar, FunctionDefinition>;
   using IntermediateValue = std::variant<RefBinding, RefType, def::ID>;
@@ -274,11 +231,16 @@ namespace ast {
   struct MakeBinding {
     const Symbol symbol;
     const InputValue value;
-  };  
+  }; 
 
+  using ExpressionTypes = std::variant<MakeBinding>;
+  struct Expression : public ExpressionTypes {
+    Expression(MakeBinding b) : ExpressionTypes(b) {}
+  };
 
   struct hash_id {
     std::size_t operator() (const BindingID &type) const { return type.id; }
+    std::size_t operator() (const FunctionID &type) const { return type.id; }
     std::size_t operator() (const Symbol &symbol) const { return std::hash<std::string>{}(symbol); }
   };
 };
@@ -286,6 +248,12 @@ namespace ast {
 struct Debugger;
 struct Interpreter {
   Interpreter(VM& vm) : vm(vm) {}
+
+  ast::FunctionID register_function(const ast::FunctionDefinition function) {
+    ast::FunctionID id = {.id=_function_id++};
+    functions.insert(std::make_pair(id, function));
+    return id;
+  }
 
   ast::ID operator()(const ast::MakeBinding binding) {
     size_t id = std::hash<std::string>{}(binding.symbol);
@@ -297,31 +265,61 @@ struct Interpreter {
         throw std::runtime_error(fmt::format("Cannot bind {} as a reference to itself", ref.symbol));
       }
       binding_values.insert(std::make_pair(binding_id, ref));
+
     } else if (std::holds_alternative<ast::RefType>(binding.value)) {
       const auto ref = std::get<ast::RefType>(binding.value);
       binding_values.insert(std::make_pair(binding_id, ref));
+
     } else if (std::holds_alternative<ast::MakeScalar>(binding.value)) {
       const auto make = std::get<ast::MakeScalar>(binding.value);
       const auto type_id = vm.type_names.at(make.type_name);
       const def::ID value_id = vm.construct(type_id, make.value);
       const ast::IntermediateValue value = {value_id};
       binding_values.insert(std::make_pair(binding_id, value));
+
     } else if (std::holds_alternative<ast::FunctionDefinition>(binding.value)) {
-      const auto id = (*this)(std::get<ast::FunctionDefinition>(binding.value));
-      binding_values.insert(std::make_pair(binding_id, id));
+      return (*this)(std::get<ast::FunctionDefinition>(binding.value));
     }
 
     bindings.insert(std::make_pair(binding.symbol, binding_id));
     return binding_id;
   }
 
-  def::ID operator()(const ast::FunctionDefinition function) {
-    return vm.type_names.at("Int");
+  ast::ID operator()(const ast::FunctionDefinition function) {
+    ast::FunctionID id { .id=_function_id++ };
+    functions.insert(std::make_pair(id, function));
+    return id;
+  }
+
+  // TODO: This should be something like ast::FunctionCall(FunctionID, Arguments)
+  ast::ID operator()(const ast::FunctionID id) {
+    const auto function = functions.at(id);
+
+    if (function.body.empty()) return vm.construct(UnitID);
+
+    if (function.body.size() == 1) {
+      return std::visit(*this, function.body.front());
+    }
+
+    auto cur = function.body.cbegin();
+    const auto end = std::prev(function.body.cend());
+
+    while (cur != end) {
+      std::visit(*this, *cur);
+      ++cur;
+    }
+
+    const auto last_value = std::visit(*this, *end);
+    return last_value;
   }
 
   private:
   std::unordered_map<ast::BindingID, ast::IntermediateValue, ast::hash_id> binding_values {};
   std::unordered_map<ast::Symbol, ast::BindingID, ast::hash_id> bindings {};
+
+  std::unordered_map<ast::FunctionID, ast::FunctionDefinition, ast::hash_id> functions {};
+  size_t _function_id {0};
+
   VM& vm;
 
   friend class Debugger;
@@ -337,9 +335,6 @@ struct Debugger {
     } else if (std::holds_alternative<def::ValueID>(id)) {
       const auto type_id = std::get<def::ValueID>(id);
       return fmt::format("ValueID:{}", type_id.id);
-    } else if (std::holds_alternative<def::FunctionID>(id)) {
-      const auto type_id = std::get<def::FunctionID>(id);
-      return fmt::format("FunctionID:{}", type_id.id);
     } else {
       throw std::runtime_error("Fill me in\n");
     }
@@ -385,23 +380,27 @@ struct Debugger {
     std::visit(*this, value);
   }
 
-  void operator()(const def::FunctionID function_id) {
-    const auto function = vm.functions.at(function_id);
+  void operator()(const ast::FunctionID function_id) {
+    const auto function = interpret.functions.at(function_id);
     fmt::print("debug:function    ");
-    std::string s = "(";
-    for (const auto type_id : function.parameters) {
-      s.append(id_to_named_id(def::ID(type_id)));
-      s.append(", ");
-    }
-    if (!function.parameters.empty()) s.erase(s.end() - 2, s.end());
+    std::string s = "(TODO: MAKE ME)";
+    // std::string s = "(";
+    // for (const auto type_id : function.parameters) {
+    //   s.append(id_to_named_id(def::ID(type_id)));
+    //   s.append(", ");
+    // }
+    // if (!function.parameters.empty()) s.erase(s.end() - 2, s.end());
 
-    s.append(fmt::format(") -> {}", id_to_named_id(def::ID(function.return_type_id))));
+    s.append(fmt::format(") -> {}", function.return_type_id.symbol));
     fmt::print("{}\n", s);
   }
 
 
   void operator()(const ast::ID id) {
-    fmt::print("ast:BindingID -> ");
+    fmt::print("ast:ID -> ");
+    if (std::holds_alternative<ast::FunctionID>(id)) {
+      fmt::print("ast:FunctionID\n");
+    }
     std::visit(*this, id);
   }
 
@@ -417,18 +416,35 @@ struct Debugger {
 struct Language {
   Language(Interpreter &i) : interpret(i) {}
 
+  auto ref_type(std::string name) { return ast::RefType { .symbol = name }; }
+  auto ref_binding(std::string name) { return ast::RefBinding {.symbol = name}; }
+
   auto make_binding(std::string name, ast::InputValue value) {
-    return interpret(ast::MakeBinding {
+    return ast::MakeBinding {
       .symbol = name,
       .value = value
-    });
+    };
   }
 
-  auto ref_type(std::string name) {
-    return ast::RefType { .symbol = name };
+  auto make_function(ast::RefType return_type, ast::Body body) {
+    return ast::FunctionDefinition {
+      .body = body,
+      .return_type_id = return_type
+    };
   }
 
-  auto ref_symbol(std::string name) { return ast::RefBinding {.symbol = name}; }
+  template<typename T>
+  ast::MakeScalar make_scalar(T v) {
+    throw std::runtime_error("lang: Don't know hot to make scalar of this kind, add another case below");
+  }
+
+  template<>
+  ast::MakeScalar make_scalar(int64_t i) {
+    return ast::MakeScalar {
+       .type_name = "Int",
+       .value = i
+    };
+  }
 
   Interpreter &interpret;
 };
@@ -441,34 +457,31 @@ int main() {
 
   fmt::print("---- make_binding\n");
   fmt::print("---- ---- x = Int\n");
-  const auto binding_id_x = lang.make_binding("x", lang.ref_type("Int"));
+  const auto binding_id_x = interpret(lang.make_binding("x", lang.ref_type("Int")));
   debug(binding_id_x);
   fmt::print("---- ---- y = x\n");
-  const auto binding_id_y = lang.make_binding("y", lang.ref_symbol("x"));
+  const auto binding_id_y = interpret(lang.make_binding("y", lang.ref_binding("x")));
   debug(binding_id_y);
 
-  // fmt::print("---- ---- four = Int(4)\n");
-  // const auto binding_id_four = interpret(
-  //   ast::MakeBinding{
-  //     ast::Symbol{"four"}, 
-  //     ast::InputValue{
-  //       ast::MakeScalar {"Int", def::value_t(int64_t{4}) }
-  //     }
-  //   }
-  // );
-  // debug(binding_id_four);
+  fmt::print("---- ---- four = Int(4)\n");
+  const auto binding_id_four = interpret(lang.make_binding("four", lang.make_scalar<int64_t>(4)));
+  debug(binding_id_four);
 
-  // fmt::print("---- ---- also_four = four\n");
-  // const auto binding_id_also_four = interpret(
-  //   ast::MakeBinding{
-  //     ast::Symbol{"also_four"}, 
-  //     ast::InputValue{
-  //       ast::RefBinding{ "four" }
-  //     }
-  //   }
-  // );
-  // debug(binding_id_also_four);
-  // fmt::print("---- ast::FunctionDefinition\n");
+  fmt::print("---- ---- also_four = four\n");
+  const auto binding_id_also_four = interpret(lang.make_binding("also_four", lang.ref_binding("four")));
+  debug(binding_id_also_four);
+
+  fmt::print("---- ast::FunctionDefinition\n");
+  const auto function_1 = interpret(lang.make_function(
+    lang.ref_type("Int"),
+    {{
+      lang.make_binding("four", lang.make_scalar<int64_t>(4)),
+      lang.make_binding("four_also", lang.ref_binding("four"))
+    }}
+  ));
+  debug(function_1);
+  const auto return_value_1 = interpret(std::get<ast::FunctionID>(function_1));
+  debug(return_value_1);
   // const auto binding_function_1 = interpret(
   //   ast::MakeBinding {
   //     ast::Symbol{"foo"},
