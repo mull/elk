@@ -140,24 +140,15 @@ static const size_t       STARTING_TYPE_ID = FunctionID.id + 1;
 
 
 
-
 struct VM {
   using VMValue = std::shared_ptr<def::Value>;
 
-  std::unordered_map<def::TypeID, def::Type, def::hash_id> types {
-    std::make_pair(UnitID, Unit),
-    std::make_pair(IntID, Int),
-    std::make_pair(CharID, Char),
-    std::make_pair(FunctionID, Function)
-  };
-  std::unordered_map<std::string, def::TypeID> type_names {
-    std::make_pair(Unit.name, UnitID),
-    std::make_pair(Int.name, IntID),
-    std::make_pair(Char.name, CharID),
-    std::make_pair(Function.name, FunctionID),
-  };
+  std::unordered_map<def::TypeID, def::Type, def::hash_id>  types {};
+  std::unordered_map<std::string, def::TypeID>              type_names {};
+  std::unordered_map<def::ValueID, VMValue, def::hash_id>   values {};
+  std::optional<const VM*>                                  parent;
 
-  std::unordered_map<def::ValueID, VMValue, def::hash_id> values {};
+  VM() = default;
 
   def::TypeID register_type(const def::Type type) {
     const auto id = def::TypeID {.id = _type_id++ };
@@ -184,8 +175,15 @@ struct VM {
     return id;
   }
 
+  def::TypeID type_named(const std::string name) const {
+    if (!type_names.contains(name)) {
+      throw std::runtime_error("Unknown type");
+    }
+    return type_names.at(name);
+  }
+
   private:
-  size_t _type_id {STARTING_TYPE_ID};
+  size_t _type_id {0};
   size_t _value_id {0};
 };
 
@@ -245,14 +243,52 @@ namespace ast {
   };
 };
 
+
+std::string id_to_named_id(def::ID id) {
+  if (std::holds_alternative<def::TypeID>(id)) {
+    const auto type_id = std::get<def::TypeID>(id);
+    return fmt::format("TypeID:{}", type_id.id);
+  } else if (std::holds_alternative<def::ValueID>(id)) {
+    const auto type_id = std::get<def::ValueID>(id);
+    return fmt::format("ValueID:{}", type_id.id);
+  } else {
+    throw std::runtime_error("Fill me in\n");
+  }
+}
+std::string id_to_named_id(ast::ID id) {
+  if (std::holds_alternative<def::ID>(id)) {
+    return id_to_named_id(std::get<def::ID>(id));
+  } else if (std::holds_alternative<ast::BindingID>(id)) {
+    const auto binding_id = std::get<ast::BindingID>(id);
+    return fmt::format("BindingID:{}", binding_id.id);
+  } else if (std::holds_alternative<ast::FunctionID>(id)) {
+    const auto function_id = std::get<ast::FunctionID>(id);
+    return fmt::format("FunctionID:{}", function_id.id);
+  } else {
+    throw std::runtime_error("Fill me in\n");
+  }
+}
+
 struct Debugger;
 struct Interpreter {
   Interpreter(VM& vm) : vm(vm) {}
+  Interpreter(VM& vm, const Interpreter* parent) : vm(vm), parent(parent) {}
 
-  ast::FunctionID register_function(const ast::FunctionDefinition function) {
-    ast::FunctionID id = {.id=_function_id++};
-    functions.insert(std::make_pair(id, function));
-    return id;
+  auto find_type_by_name(const ast::Symbol name) const {
+    if (vm.type_names.contains(name)) {
+      return vm.type_names.at(name);
+    }
+
+    if (parent) {
+      fmt::print("Looking into parent for type {}\n", name);
+      return parent->find_type_by_name(name);
+    }
+
+    throw std::runtime_error("Could not find named type");
+  }
+
+  ast::ID operator()(const ast::RefType type) {
+    return vm.type_named(type.symbol);
   }
 
   ast::ID operator()(const ast::MakeBinding binding) {
@@ -272,10 +308,10 @@ struct Interpreter {
 
     } else if (std::holds_alternative<ast::MakeScalar>(binding.value)) {
       const auto make = std::get<ast::MakeScalar>(binding.value);
-      const auto type_id = vm.type_names.at(make.type_name);
-      const def::ID value_id = vm.construct(type_id, make.value);
-      const ast::IntermediateValue value = {value_id};
-      binding_values.insert(std::make_pair(binding_id, value));
+      const auto type_id = find_type_by_name(make.type_name);
+      // const def::ID value_id = vm.construct(type_id, make.value);
+      // const ast::IntermediateValue value = {value_id};
+      // binding_values.insert(std::make_pair(binding_id, value));
 
     } else if (std::holds_alternative<ast::FunctionDefinition>(binding.value)) {
       return (*this)(std::get<ast::FunctionDefinition>(binding.value));
@@ -293,52 +329,54 @@ struct Interpreter {
 
   // TODO: This should be something like ast::FunctionCall(FunctionID, Arguments)
   ast::ID operator()(const ast::FunctionID id) {
+    fmt::print("interpret: FunctionID\n");
     const auto function = functions.at(id);
+    if (function.body.empty()) {
+      fmt::print("warn: Empty function body\n");
+      return vm.construct(UnitID);
+    };
 
-    if (function.body.empty()) return vm.construct(UnitID);
+    VM scope_vm;
+    auto scope = Interpreter(scope_vm, this);
 
-    if (function.body.size() == 1) {
-      return std::visit(*this, function.body.front());
-    }
+    const auto exec = [&function, &scope_vm, &scope]() {
+      if (function.body.size() == 1) { return std::visit(scope, function.body.front()); }
 
-    auto cur = function.body.cbegin();
-    const auto end = std::prev(function.body.cend());
+      auto cur = function.body.cbegin();
+      const auto end = std::prev(function.body.cend());
 
-    while (cur != end) {
-      std::visit(*this, *cur);
-      ++cur;
-    }
+      while (cur != end) {
+        std::visit(scope, *cur);
+        ++cur;
+      }
 
-    const auto last_value = std::visit(*this, *end);
-    return last_value;
+      const auto last_value = std::visit(scope, *end);
+      fmt::print("Return here\n");
+      return last_value;
+    };
+
+    const auto value = exec();
+    // OK now we have to store this in this scope (i.e. in our current VM)
+    fmt::format("Execution returned {}", id_to_named_id(value));
+
+    return value;
   }
 
   private:
-  std::unordered_map<ast::BindingID, ast::IntermediateValue, ast::hash_id> binding_values {};
-  std::unordered_map<ast::Symbol, ast::BindingID, ast::hash_id> bindings {};
 
-  std::unordered_map<ast::FunctionID, ast::FunctionDefinition, ast::hash_id> functions {};
+  std::unordered_map<ast::BindingID, ast::IntermediateValue, ast::hash_id>      binding_values {};
+  std::unordered_map<ast::Symbol, ast::BindingID, ast::hash_id>                 bindings {};
+  std::unordered_map<ast::FunctionID, ast::FunctionDefinition, ast::hash_id>    functions {};
   size_t _function_id {0};
 
   VM& vm;
+  const Interpreter* parent;
 
   friend class Debugger;
 };
 
 struct Debugger {
-  Debugger(const VM& vm, const Interpreter& interpret) : vm(vm), interpret(interpret) {}
-
-  std::string id_to_named_id(def::ID id) {
-    if (std::holds_alternative<def::TypeID>(id)) {
-      const auto type_id = std::get<def::TypeID>(id);
-      return fmt::format("TypeID:{}", type_id.id);
-    } else if (std::holds_alternative<def::ValueID>(id)) {
-      const auto type_id = std::get<def::ValueID>(id);
-      return fmt::format("ValueID:{}", type_id.id);
-    } else {
-      throw std::runtime_error("Fill me in\n");
-    }
-  }
+  Debugger(const VM& vm, const Interpreter& interpret) : vm(vm), interpreter(interpret) {}
 
   void operator()(const def::TypeID type_id) {
     const auto type = vm.types.at(type_id);
@@ -352,14 +390,21 @@ struct Debugger {
   }
 
   void operator()(const ast::BindingID binding_id) {
-    const auto value = interpret.binding_values.at(binding_id);
-    (*this)(value);
+    std::optional<ast::IntermediateValue> value;
+    if (interpreter.binding_values.contains(binding_id)) {
+      value.emplace(interpreter.binding_values.at(binding_id));
+    }
+
+    if (!value)
+      throw std::runtime_error("Invalid binding_id, interpret has no such binding.");
+
+    (*this)(value.value());
   }
 
   void operator()(const ast::RefBinding binding) {
     fmt::print("ast:RefBinding '{}' -> ", binding.symbol);
-    const auto id = interpret.bindings.at(binding.symbol);
-    const auto value = interpret.binding_values.at(id);
+    const auto id = interpreter.bindings.at(binding.symbol);
+    const auto value = interpreter.binding_values.at(id);
     (*this)(value);
   }
 
@@ -381,7 +426,7 @@ struct Debugger {
   }
 
   void operator()(const ast::FunctionID function_id) {
-    const auto function = interpret.functions.at(function_id);
+    const auto function = interpreter.functions.at(function_id);
     fmt::print("debug:function    ");
     std::string s = "(TODO: MAKE ME)";
     // std::string s = "(";
@@ -410,7 +455,7 @@ struct Debugger {
 
   private:
   const VM& vm;
-  const Interpreter& interpret;
+  const Interpreter& interpreter;
 };
 
 struct Language {
@@ -450,38 +495,44 @@ struct Language {
 };
 
 int main() {
-  VM vm;
-  Interpreter interpret(vm);
+  VM root;
+  root.register_type(Unit);
+  root.register_type(Int);
+  root.register_type(Char);
+  root.register_type(Function);
+
+  Interpreter interpret(root);
   Language lang(interpret);
-  Debugger debug(vm, interpret);
+  Debugger debug(root, interpret);
 
-  fmt::print("---- make_binding\n");
-  fmt::print("---- ---- x = Int\n");
-  const auto binding_id_x = interpret(lang.make_binding("x", lang.ref_type("Int")));
-  debug(binding_id_x);
-  fmt::print("---- ---- y = x\n");
-  const auto binding_id_y = interpret(lang.make_binding("y", lang.ref_binding("x")));
-  debug(binding_id_y);
+  // fmt::print("---- make_binding\n");
+  // fmt::print("---- ---- x = Int\n");
+  // const auto binding_id_x = interpret(lang.make_binding("x", lang.ref_type("Int")));
+  // debug(binding_id_x);
+  // fmt::print("---- ---- y = x\n");
+  // const auto binding_id_y = interpret(lang.make_binding("y", lang.ref_binding("x")));
+  // debug(binding_id_y);
 
-  fmt::print("---- ---- four = Int(4)\n");
-  const auto binding_id_four = interpret(lang.make_binding("four", lang.make_scalar<int64_t>(4)));
-  debug(binding_id_four);
+  // fmt::print("---- ---- four = Int(4)\n");
+  // const auto binding_id_four = interpret(lang.make_binding("four", lang.make_scalar<int64_t>(4)));
+  // debug(binding_id_four);
 
-  fmt::print("---- ---- also_four = four\n");
-  const auto binding_id_also_four = interpret(lang.make_binding("also_four", lang.ref_binding("four")));
-  debug(binding_id_also_four);
+  // fmt::print("---- ---- also_four = four\n");
+  // const auto binding_id_also_four = interpret(lang.make_binding("also_four", lang.ref_binding("four")));
+  // debug(binding_id_also_four);
 
   fmt::print("---- ast::FunctionDefinition\n");
   const auto function_1 = interpret(lang.make_function(
     lang.ref_type("Int"),
     {{
       lang.make_binding("four", lang.make_scalar<int64_t>(4)),
-      lang.make_binding("four_also", lang.ref_binding("four"))
+      // lang.make_binding("four_also", lang.ref_binding("four"))
+      // lang.make_binding("four", lang.ref_type("Int"))
     }}
   ));
   debug(function_1);
   const auto return_value_1 = interpret(std::get<ast::FunctionID>(function_1));
-  debug(return_value_1);
+  // debug(return_value_1);
   // const auto binding_function_1 = interpret(
   //   ast::MakeBinding {
   //     ast::Symbol{"foo"},
