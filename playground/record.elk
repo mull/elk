@@ -35,7 +35,7 @@ type Record =
 
   
   # Input
-  [binding: NamedBinding] ->
+  (binding: NamedBinding) ->
     # Would change this syntax but this makes it a tiny bit easier
     @fields [set:NamedBinding.name to:NamedBinding.type]
 
@@ -77,5 +77,5 @@ let input = Input {
 }
 
 # Reference
-x
-input.firstName
+input.firstName # Str ("Emil")
+x # Int (42)

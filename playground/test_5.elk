@@ -1,0 +1,2 @@
+let x: Int = 154
+let y: Int = x
