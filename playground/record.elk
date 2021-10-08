@@ -13,8 +13,8 @@ let z = y
 # List of Type
 [Int, Char]
 
-# Associative Array
-[numbers_with: Int, characters_with: Char]
+# Named tuple
+(numbers_with: Int, characters_with: Char)
 
 # Abstract Data Types
 type NamedBinding
@@ -22,7 +22,7 @@ type BoundAssignment
 
 # Scope
 let foo =
-  x
+  let bar = x
 
 # Concrete Data Types
 type Record =
@@ -37,7 +37,7 @@ type Record =
   # Input
   (binding: NamedBinding) ->
     # Would change this syntax but this makes it a tiny bit easier
-    @fields [set:NamedBinding.name to:NamedBinding.type]
+    @fields (set:NamedBinding.name to:NamedBinding.type)
 
 # Instance of Type
 let Record =

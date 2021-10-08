@@ -1,0 +1,28 @@
+Keyword
+  Let    'let'
+  Type   'Type'
+
+Identifier
+  Type
+  Var
+
+Symbol
+  Equals '='
+
+
+VarBinding
+  Keyword.Let 
+  left: Identifier.Var
+  Optional
+    Symbol.Equals
+    right: Either
+      Identifier
+      Expression
+
+TypeBinding
+  Keyword.Type
+  left: Identifier.Type
+  Optional
+    Symbol.Equals
+    right: Either
+      Identifier

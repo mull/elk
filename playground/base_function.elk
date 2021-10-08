@@ -1,0 +1,7 @@
+# Things needed to implement the echo function
+
+(Int)       # Tuple TupleItem(type=Int, name='')
+(a: Int)    # Tuple TupleItem(type=Int, name='a')
+
+let echo = (a: Int) ->
+  a

@@ -81,7 +81,8 @@
     "random": "cpp",
     "regex": "cpp",
     "thread": "cpp",
-    "cassert": "cpp"
+    "cassert": "cpp",
+    "filesystem": "cpp"
   },
   "FSharp.suggestGitignore": false
 }
