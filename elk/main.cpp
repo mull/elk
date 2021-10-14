@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -38,11 +39,23 @@ namespace def {
 
   struct Value; struct Type;
 
-  using value_t = std::variant<std::nullopt_t, int64_t, char>;
+  struct ListNode {
+    const def::ID value;
+    std::shared_ptr<ListNode> next;
+
+    ListNode(def::ID v) : value(v) {}
+  };
+
+  using value_t = std::variant<
+    int64_t, 
+    char,
+    std::shared_ptr<ListNode>
+  >;
 
   struct Value {
     explicit Value(TypeID type_id, int64_t i) : type_id(type_id), v(i) {};
     explicit Value(TypeID type_id, char c) : type_id(type_id), v(c) {};
+    explicit Value(TypeID type_id, value_t v) : type_id(type_id), v(v) {};
 
     const TypeID type_id;
     const value_t v {0};
@@ -71,11 +84,26 @@ namespace def {
     };
   }
 
+  static Constructor make_list_constructor() {
+    return {
+      .is_abstract  = false,
+      .make         = [](TypeID type_id) { return Value(type_id, nullptr); },
+      .make_1       = [](auto type_id, std::any v) { 
+        return Value(type_id, std::any_cast<value_t>(v)); 
+      }
+    };
+  }
+
   struct Type {
     const std::string name;
     const def::Constructor constructor { .is_abstract = true };
   };
 };
+
+std::shared_ptr<def::ListNode> tail(std::shared_ptr<def::ListNode> cur) {
+  if (cur->next) return tail(cur->next);
+  return cur;
+}
 
 std::any unpack_value_t(def::value_t t) {
   if (std::holds_alternative<char>(t)) return std::get<char>(t);
@@ -91,6 +119,7 @@ template <> struct fmt::formatter<def::value_t>: formatter<std::string> {
     std::string v = std::visit(overloaded {
       [](int64_t i) { return fmt::to_string(i); },
       [](char c) { return fmt::to_string(c); },
+      [](std::shared_ptr<def::ListNode> n) { return fmt::to_string("ListNode"); },
       [](auto) { return fmt::to_string("???"); }
     }, value);
 
@@ -102,15 +131,18 @@ static const auto Unit = def::Type { .name = "Unit" };
 static const auto Int = def::Type { .name="Int", .constructor=def::make_int64_constructor() };
 static const auto Char = def::Type { .name="Char", .constructor=def::make_char_constructor() };
 static const auto Function = def::Type { .name="Function" };
+static const auto List = def::Type { .name="List", .constructor=def::make_list_constructor() };
 
 static const def::TypeID  UnitID = {.id=0},
                           IntID = {.id=1},
                           CharID = {.id=2},
-                          FunctionID = {.id=3};
+                          FunctionID = {.id=3},
+                          ListID = {.id=4};
 
-static const size_t       STARTING_TYPE_ID = FunctionID.id + 1;
+static const size_t       STARTING_TYPE_ID = ListID.id + 1;
 
 
+std::string id_to_named_id(def::ID id);
 
 struct VM {
   using VMValue = std::shared_ptr<def::Value>;
@@ -136,21 +168,51 @@ struct VM {
     return id;
   }
 
-  def::ValueID construct(const def::TypeID type_id, const def::value_t value) {
+  def::Type assert_type_id(const def::TypeID& type_id) {
+    if (!types.contains(type_id)) { 
+      throw std::runtime_error(fmt::format("invalid type lookup: {}", id_to_named_id(type_id)));
+    }
     const auto type = types.at(type_id);
     if (type.constructor.is_abstract) { throw std::runtime_error("Tried to construct an abstract type"); }
+    return type;
+  }
 
+  def::ValueID construct(const def::TypeID type_id, const def::value_t value) {
+    const auto type = assert_type_id(type_id);
     const def::ValueID id = {.id=_value_id++};
     values.insert(std::make_pair(id, std::make_shared<def::Value>(type.constructor.make_1(type_id, unpack_value_t(value)))));
     return id;
+  }
+
+  def::ValueID construct_list(const def::TypeID type_id, auto begin, auto end) {
+    if (begin == end) throw std::runtime_error("Don't call me with empty lists");
+    const auto type = assert_type_id(type_id);
+
+    const def::ID first = *begin;
+    auto head = std::make_shared<def::ListNode>(first);
+    auto cur = head;
+    ++begin;
+
+    while (begin != end) {
+      const def::ID v = *begin;
+      cur->next = std::make_shared<def::ListNode>(v);
+      cur = cur->next;
+      ++begin;
+    }
+
+    const auto v = def::value_t(head);
+    const def::ValueID id = {.id=_value_id++};
+    const def::Value val = type.constructor.make_1(type_id, v);
+    values.insert(std::make_pair(id, std::make_shared<def::Value>(val)));
+    return id;
+    // return construct(ListID, v);
+    //return values.begin()->first;
   }
 
   private:
   size_t _type_id {0};
   size_t _value_id {0};
 };
-
-
 
 // Nodes that the interpreter reads and turns into calls to the VM
 namespace ast {
@@ -180,6 +242,9 @@ namespace ast {
 
   struct Expression;
   struct Body : public std::vector<Expression> {};
+
+  struct List : public std::vector<ID> {};
+  struct MakeList : public std::vector<MakeScalar> {};
 
   template<typename ItemType>
   struct TupleItem {
@@ -222,7 +287,6 @@ namespace ast {
 
 
 };
-
 
 std::string id_to_named_id(def::ID id) {
   if (std::holds_alternative<def::TypeID>(id)) {
@@ -338,7 +402,7 @@ struct Interpreter {
     return find_binding_by_name(binding.symbol);
   }
 
-  ast::ID operator()(ast::MakeScalar scalar) {
+  def::ID operator()(ast::MakeScalar scalar) {
       const auto type_id = find_type_by_name(scalar.type_name);
       return vm.construct(type_id, scalar.value);
   }
@@ -459,6 +523,16 @@ struct Interpreter {
     return value;
   }
 
+  ast::ID operator()(ast::MakeList list) {
+    std::vector<def::ID> values;
+    std::transform(list.begin(), list.end(), std::back_inserter(values),
+      [=](const auto& v) -> def::ID { 
+        return (*this)(v);
+      }
+    );
+    return vm.construct_list(ListID, values.begin(), values.end());
+  }
+
   // Ensure that the values of BindingID and FunctionID 
   // are manifested in the VM, and change the ast::ID to
   // point to the value (say the value of the binding) instead
@@ -490,8 +564,21 @@ struct Debugger {
 
   void operator()(const def::ValueID value_id) {
     const auto value = vm.values.at(value_id);
+    const auto& vm = this->vm;
     const auto type = vm.types.at(value->type_id);
-    fmt::print("debug:val         ({}, {}, [use_count:{}])\n", type.name, value->v, value.use_count() - 1);
+    std::visit(overloaded {
+      [=, &value](const std::shared_ptr<def::ListNode>& node) {
+        fmt::print("debug:list        (, , [use_count:{}]\n", value.use_count() - 1);
+
+        fmt::print("head:");
+        std::visit(*this, node->value);
+        fmt::print("tail:");
+        std::visit(*this, tail(node)->value);
+      },
+      [&vm, &type, &value](const auto v) {
+        fmt::print("debug:val         ({}, {}, [use_count:{}])\n", type.name, v, value.use_count() - 1);
+      }
+    }, value->v);
   }
 
   void operator()(const ast::BindingID binding_id) {
@@ -620,6 +707,15 @@ struct Language {
     };
   }
 
+  template<typename T>
+  ast::MakeList make_list(std::vector<T> values) {
+    auto list = ast::MakeList{};
+    for (const T val : values) {
+      list.push_back(make_scalar<T>(val));
+    }
+    return list;
+  }
+
   Interpreter &interpret;
 };
 
@@ -630,80 +726,39 @@ int main() {
   interpret.register_type(Unit);
   interpret.register_type(Int);
   interpret.register_type(Char);
+  interpret.register_type(Function);
+  interpret.register_type(List);
 
   Language lang(interpret);
   Debugger debug(vm, interpret);
 
+  fmt::print("---- let values = [1, 2, 3]\n");
+  const auto list = interpret(lang.make_list<int64_t>({1, 2, 3}));
+  // const auto list_id = vm.construct_list(ListID, list.cbegin(), list.cend());
+  // debug(list_id);
+  debug(list);
 
-  fmt::print("---- let echo(in: Int) -> in\n");
-  fmt::print("---- echo(42)\n");
-  const auto echo_fn_id = interpret(lang.make_function(
-    lang.ref_type("Int"),
-    ast::FunctionParams {{ 
-      { .symbol = "in", .item = lang.type("Int") }
-     }},
-    ast::Body {{ 
-      lang.ref_binding("in")
-    }}
-  ));
-  debug(echo_fn_id);
+  // fmt::print("---- let echo(in: Int) -> in\n");
+  // fmt::print("---- echo(42)\n");
+  // const auto echo_fn_id = interpret(lang.make_function(
+  //   lang.ref_type("Int"),
+  //   ast::FunctionParams {{ 
+  //     { .symbol = "in", .item = lang.type("Int") }
+  //    }},
+  //   ast::Body {{ 
+  //     lang.ref_binding("in")
+  //   }}
+  // ));
+  // debug(echo_fn_id);
 
-  const auto four = interpret(lang.make_scalar<int64_t>(42));
-  const auto return_value = interpret(
-    std::get<ast::FunctionID>(echo_fn_id),
-    ast::FunctionArguments {{ 
-      { .symbol = "in", .item = four } 
-    }}
-  );
-  debug(return_value);
-
-  /*
-  fmt::print("---- debug(T)\n");
-  debug(UnitID);
-  debug(IntID);
-  debug(CharID);
-
-  fmt::print("\n");
-  fmt::print("---- make_binding\n");
-  fmt::print("---- ---- x = Int\n");
-  const auto binding_id_x = interpret(lang.make_binding("x", lang.ref_type("Int")));
-  debug(binding_id_x);
-  fmt::print("\n---- ---- y = x\n");
-  const auto binding_id_y = interpret(lang.make_binding("y", lang.ref_binding("x")));
-  debug(binding_id_y);
-
-  fmt::print("\n---- ---- four = Int(4)\n");
-  const auto binding_id_four = interpret(lang.make_binding("four", lang.make_scalar<int64_t>(4)));
-  debug(binding_id_four);
-
-  fmt::print("\n---- ---- also_four = four\n");
-  const auto binding_id_also_four = interpret(lang.make_binding("also_four", lang.ref_binding("four")));
-  debug(binding_id_also_four);
-
-  fmt::print("\n---- make_function\n");
-  const auto function_foo = interpret(lang.make_binding(
-    "foo",
-    lang.make_function(
-      lang.ref_type("Int"),
-      {{
-        lang.make_binding("four", lang.make_scalar<int64_t>(4)),
-        lang.make_binding("four_also", lang.ref_binding("four")),
-        lang.make_binding("four_again", lang.ref_binding("four_also")),
-        // lang.make_binding("four", lang.ref_type("Int"))
-      }}
-    )
-  ));
-  debug(function_foo);
-
-  const auto return_value_foo = interpret(lang.make_function_call("foo"));
-  debug(return_value_foo);
-
-  
-  fmt::print("\n---- bind to a function and call it\n");
-  const auto bind_to_foo = interpret(lang.make_binding("foobar", lang.ref_binding("foo")));
-  debug(bind_to_foo);
-  debug(interpret(lang.make_function_call("foobar")));
-  ;*/
+  // const auto four = interpret(lang.make_scalar<int64_t>(42));
+  // const auto return_value = interpret(
+  //   std::get<ast::FunctionID>(echo_fn_id),
+  //   ast::FunctionArguments {{ 
+  //     { .symbol = "in", .item = four } 
+  //   }}
+  // );
+  // debug(return_value);
 
   return 0;
 }
