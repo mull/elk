@@ -1,0 +1,33 @@
+io = 
+  type IO
+
+type T = Type
+
+type ADT
+  let v
+
+  (T v)
+    @v = v
+
+type Success = ADT
+type Error = ADT
+
+type Result = Success | Error
+
+
+wait =
+  (time: Integer) ->
+    # elk.sys.sleep(time)
+
+  (for:IO, time: Integer) ->
+    # elk.sys.race?!
+
+
+fetch =
+  (url: String) -> Result
+    io {
+      s = HTTP (get:url)
+      wait (for:s time:10.seconds)
+        'Timeout -> Error<'Timeout>("The request timed out.")
+        'Body -> Success
+    }
