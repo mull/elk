@@ -6,8 +6,10 @@ type T = Type
 type ADT
   let v
 
-  (T v)
+  (v: T)
     @v = v
+
+  
 
 type Success = ADT
 type Error = ADT

@@ -1,0 +1,28 @@
+# No keyword is needed to make a "normal" binding
+x: Int = 1
+
+# A normal binding can be overwritten at any point
+x = 4
+x = 3
+
+# For a scope, have state variables? (Algebraic effects)
+sum, average =
+  loop some_array 
+    (item:some_array.MemberType) ->
+      let sum:Int = 0, count:Int = 0
+
+      sum += item.some_property
+      count += 1
+    (sum:Int, count:Int) ->
+      let average:Int = sum / count
+
+# But this is slightly annoying because it's rather invasive
+# The `loop` keyword would have to provide some different execution
+# context for a function. Or a function would have to detect that it
+# needs to be executed in such a context and always be invoked as such.
+
+# Since functions are first class values this would mean that you could pass
+# a function to a bunch of different places, and it would still be the same function
+# with shared state between its "locations."
+
+# What would that mean for concurrency/parallelism?

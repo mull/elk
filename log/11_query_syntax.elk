@@ -1,0 +1,20 @@
+Int.one -> String
+# query Int for a method named one
+# query World for a natural conversion from Int to String
+# Works because the prelude defines it
+
+let x = 1
+Int.x -> String
+# query Int for the conversion Typeof<x> (Int) into String
+# Works because every type has an identity function and the prelude defines Int -> String
+
+
+Memory.construct(constructor_id, arguments)
+# query Memory for a path that is named construct and is of type Callable<Typeof<ConstructorID, ArgumentList>
+
+CallConstructor = (constructor: ConstructorID, args: ArgumentList) ->
+  Memory.construct(constructor_id, Eval.args -> ValueList)
+
+# `Eval.args -> ValueList` translates to
+# query Eval for the conversion Typeof<args> (ArgumentList) into ValueList
+# Works if said conversion is defined on the Eval type

@@ -1,0 +1,35 @@
+type Unit
+type Abstract
+
+# The `type` keyword is short for call the `make_type` function with an argument
+# Tuple (name: String, scope: Scope)
+
+type Point 
+  x: Int
+  y: Int
+  
+# The scope passed to Point is
+# TupleElement(Symbol(x), TypeRef(Int))
+# TupleElement(Symbol(y), TypeRef(Int))
+
+# And when we evaluate it we transform TupleElement into
+# MakeBinding(Symbol(y), TypeRef(Int))
+
+# And so we have created a type with two members
+
+type Name
+  first: String
+  last: String
+
+  () -> String
+    append this:[" ", @last] to:@first 
+
+# `make_function("constructor()", [], returnType:RefType(String), body: Scope)
+# Scope:
+# `call_function('append', Tuple(to:String, this:make_array(String(" "), RefBinding(@last))))
+
+
+point = Point {
+  x = 2
+  y = 3
+}
