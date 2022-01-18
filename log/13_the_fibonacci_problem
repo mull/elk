@@ -1,0 +1,37 @@
+# Goal: Pseudocode that reuses as much of the same code for
+
+# 1. Numerical fibonacci series
+# 2. Bunny "fibonacci series" (how many pairs of bunnies, each pair mates at the end of the month)
+# 3. A family tree of bunnies from ^ which keeps connections/relations between them
+
+# So as few changes as possible between each "iteration"
+
+let fibonacci =
+  () -> fibonacci (1, 1)
+  (prev, next) -> fibonacci (next, prev + next)
+
+# That doesn't store the values
+
+let fibonacci =
+  @numbers = [1, 1]
+  let sum = @numbers[-2..] -> (a, b) -> +
+
+  -> ()
+    fibonacci (@numbers[:last], @numbers[-2..].reduce(:+))
+
+  -> (a, b)
+    @numbers ++ (a)
+    fibonacci(b, a + b)
+
+# This one is very specific to integers
+# The [1, 1] is particularly troubling
+
+let fibonacci = (of: Type)
+  # ...
+  @citizens = [Type (), Type ()]
+
+fibonacci (Bunny)
+fibonacci (Int)
+
+# Which would require that both Bunny and Int had some method that produces
+# an "initial" value - which doesn't seem too odd
